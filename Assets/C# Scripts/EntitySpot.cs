@@ -15,6 +15,19 @@ public class EntitySpot : MonoBehaviour
     public Camera playerCamera;         
     public Image vignetteImage;         
 
+    [Header("Chase 3D Audio Settings (Chase Entity Only)")]
+    [Tooltip("Audio source attached to the entity or mesh object.")]
+    public AudioSource chaseAudioSource;
+    [Tooltip("Audio clip for footsteps/screams that loop during the chase.")]
+    public AudioClip chaseFootstepsClip;
+    [Tooltip("Distance at which the sound is at 100% full volume.")]
+    public float minAudioDistance = 5.0f;
+    [Tooltip("Maximum distance at which the sound becomes completely silent.")]
+    public float maxAudioDistance = 60.0f;
+    [Range(0f, 1f)] public float chaseAudioVolume = 1.0f;
+    [Tooltip("Use Linear curve for better distant reach, or Logarithmic for realistic drop-off.")]
+    public bool useLinearRolloff = true;
+
     [Header("Player Slowdown")]
     public FirstPersonController playerController;
     [Range(0f, 1f)] public float slowdownMultiplier = 0.4f;
@@ -56,24 +69,25 @@ public class EntitySpot : MonoBehaviour
     public float zoomFOV = 45.0f;            
     public float zoomSpeed = 5.0f;           
     public float atmosphereFadeOutSpeed = 2.5f; 
-    public float lightDisableRadius = 50.0f; 
 
     [Header("Darkness Settings")]
-    [Range(0f, 1f)] public float targetVignetteAlpha = 0.95f; 
-    public Color darkAmbientColor = new Color(0.02f, 0.02f, 0.02f, 1f); 
-    public bool disableDirectionalLights = true;
+    [Range(0f, 1f)] public float targetVignetteAlpha = 0.35f; 
+    public Color darkAmbientColor = new Color(0.25f, 0.25f, 0.25f, 1f); 
+    public bool disableDirectionalLights = true; 
 
     [Header("Darkness / Exposure Settings (URP)")]
     public Volume globalVolume;
-    public float darkExposure = -1.5f; 
+    public float darkExposure = -0.8f; 
 
-    [Header("Filter Settings")]
+    [Header("Filter & Material Settings")]
     public string targetObjectName = "CeilingLights"; 
+    public Material darkCeilingMaterial;
 
-    // Static Atmosphere Tracking
+    // Static Atmosphere Tracking & Material Backups
     private static List<EntitySpot> activeSpottedEntities = new List<EntitySpot>();
     private static List<GameObject> globalDisabledLightObjects = new List<GameObject>();
     private static List<Light> globalDisabledDirectionalLights = new List<Light>();
+    private static Dictionary<Renderer, Material[]> originalMaterialCache = new Dictionary<Renderer, Material[]>();
 
     private static bool isOriginalLightingSaved = false;
     private static Color originalAmbientColor;
@@ -86,6 +100,7 @@ public class EntitySpot : MonoBehaviour
         activeSpottedEntities.Clear();
         globalDisabledLightObjects.Clear();
         globalDisabledDirectionalLights.Clear();
+        originalMaterialCache.Clear();
         isOriginalLightingSaved = false;
     }
 
@@ -114,12 +129,7 @@ public class EntitySpot : MonoBehaviour
             isOriginalLightingSaved = true;
         }
 
-        if (globalVolume != null && globalVolume.profile != null)
-        {
-            globalVolume.profile = Instantiate(globalVolume.profile);
-            globalVolume.profile.TryGet(out colorAdjustments);
-        }
-
+        FetchColorAdjustments();
         ResetExposureImmediate();
         EnsurePlayerReference();
 
@@ -149,6 +159,36 @@ public class EntitySpot : MonoBehaviour
         {
             vignetteImage.transform.SetAsFirstSibling();
             SetAlpha(vignetteImage, 0f);
+        }
+
+        EnsureAudioSource();
+    }
+
+    private void EnsureAudioSource()
+    {
+        if (!isChaseEntity) return;
+
+        GameObject targetObj = entityMeshObject != null ? entityMeshObject : gameObject;
+
+        if (chaseAudioSource == null)
+        {
+            chaseAudioSource = targetObj.GetComponent<AudioSource>();
+            if (chaseAudioSource == null)
+            {
+                chaseAudioSource = targetObj.AddComponent<AudioSource>();
+            }
+        }
+
+        if (chaseAudioSource != null)
+        {
+            chaseAudioSource.playOnAwake = false;
+            chaseAudioSource.loop = true;
+            chaseAudioSource.spatialBlend = 1.0f; // 100% 3D Sound
+            chaseAudioSource.rolloffMode = useLinearRolloff ? AudioRolloffMode.Linear : AudioRolloffMode.Logarithmic;
+            chaseAudioSource.minDistance = minAudioDistance;
+            chaseAudioSource.maxDistance = maxAudioDistance;
+            chaseAudioSource.volume = chaseAudioVolume;
+            if (chaseFootstepsClip != null) chaseAudioSource.clip = chaseFootstepsClip;
         }
     }
 
@@ -184,6 +224,9 @@ public class EntitySpot : MonoBehaviour
 
         playerInTrigger = isSpotted = sequenceFinished = isChasing = isAttacking = false;
         currentVignetteAlpha = currentTextAlpha = 0f;
+
+        if (chaseAudioSource != null && chaseAudioSource.isPlaying)
+            chaseAudioSource.Stop();
 
         if (vignetteImage != null) SetAlpha(vignetteImage, 0f);
         if (runTextComponent != null) SetAlpha(runTextComponent, 0f);
@@ -253,7 +296,9 @@ public class EntitySpot : MonoBehaviour
                 currentTextAlpha = 1f; 
 
                 RenderSettings.ambientMode = AmbientMode.Flat;
-                DisableNearbyCeilingFixtures();
+
+                // Turn off lights and swap materials for ALL entities upon spotting
+                DisableAllCeilingFixturesInstantly();
                 if (disableDirectionalLights) DisableDirectionalLights();
 
                 ApplyPlayerSlowdown();
@@ -267,7 +312,7 @@ public class EntitySpot : MonoBehaviour
 
         if (isChasing)
         {
-            DisableNearbyCeilingFixtures();
+            DisableAllCeilingFixturesInstantly();
             if (disableDirectionalLights) DisableDirectionalLights();
 
             if (!isAttacking && navAgent != null && navAgent.enabled && playerCamera != null)
@@ -304,15 +349,16 @@ public class EntitySpot : MonoBehaviour
         float lerpSpeed = (currentVignetteAlpha > 0f) ? zoomSpeed : atmosphereFadeOutSpeed;
         bool isSpottingActive = activeSpottedEntities.Exists(e => e.isSpotted && !e.isChasing);
 
-        if (isSpottingActive)
+        if (isSpottingActive || isChasing)
         {
+            FetchColorAdjustments();
             if (colorAdjustments != null)
             {
                 colorAdjustments.postExposure.overrideState = true;
                 colorAdjustments.postExposure.value = Mathf.Lerp(colorAdjustments.postExposure.value, darkExposure, Time.deltaTime * lerpSpeed);
             }
             RenderSettings.ambientLight = Color.Lerp(RenderSettings.ambientLight, darkAmbientColor, Time.deltaTime * lerpSpeed);
-            RenderSettings.reflectionIntensity = Mathf.Lerp(RenderSettings.reflectionIntensity, 0.05f, Time.deltaTime * lerpSpeed);
+            RenderSettings.reflectionIntensity = Mathf.Lerp(RenderSettings.reflectionIntensity, 0.1f, Time.deltaTime * lerpSpeed);
         }
         else
         {
@@ -444,9 +490,8 @@ public class EntitySpot : MonoBehaviour
         if (originalSprintSpeed > 0f) playerController.sprintSpeed = originalSprintSpeed;
     }
 
-    private void DisableNearbyCeilingFixtures()
+    private void DisableAllCeilingFixturesInstantly()
     {
-        Vector3 entityPos = entityMeshObject != null ? entityMeshObject.transform.position : transform.position;
         string targetLower = string.IsNullOrEmpty(targetObjectName) ? "ceilinglights" : targetObjectName.ToLower();
 
         foreach (GameObject obj in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
@@ -454,13 +499,26 @@ public class EntitySpot : MonoBehaviour
             if (obj == null) continue;
             string name = obj.name.ToLower();
 
-            if (name == targetLower || name == "ceilinglights" || name.StartsWith("ceiling_light"))
+            if (name.Contains("ceiling_light") || name == "ceilinglights" || name.StartsWith("ceilinglight"))
             {
-                float dist = Mathf.Min(Vector3.Distance(entityPos, obj.transform.position), Vector3.Distance(transform.position, obj.transform.position));
-                if (dist <= lightDisableRadius)
+                if (obj.activeSelf) obj.SetActive(false);
+                if (!globalDisabledLightObjects.Contains(obj)) globalDisabledLightObjects.Add(obj);
+
+                if (darkCeilingMaterial != null)
                 {
-                    if (obj.activeSelf) obj.SetActive(false);
-                    if (!globalDisabledLightObjects.Contains(obj)) globalDisabledLightObjects.Add(obj);
+                    Renderer[] renderers = obj.GetComponentsInChildren<Renderer>(true);
+                    foreach (Renderer rend in renderers)
+                    {
+                        if (rend == null) continue;
+                        if (!originalMaterialCache.ContainsKey(rend))
+                        {
+                            originalMaterialCache[rend] = rend.sharedMaterials;
+                        }
+
+                        Material[] darkMats = new Material[rend.sharedMaterials.Length];
+                        for (int i = 0; i < darkMats.Length; i++) darkMats[i] = darkCeilingMaterial;
+                        rend.sharedMaterials = darkMats;
+                    }
                 }
             }
         }
@@ -486,6 +544,12 @@ public class EntitySpot : MonoBehaviour
         foreach (Light l in globalDisabledDirectionalLights) if (l != null) l.enabled = true;
         globalDisabledDirectionalLights.Clear();
 
+        foreach (var kvp in originalMaterialCache)
+        {
+            if (kvp.Key != null) kvp.Key.sharedMaterials = kvp.Value;
+        }
+        originalMaterialCache.Clear();
+
         if (isOriginalLightingSaved)
         {
             RenderSettings.ambientLight = originalAmbientColor;
@@ -509,7 +573,6 @@ public class EntitySpot : MonoBehaviour
             currentVignetteAlpha = currentTextAlpha = 0f;
             targetFOV = defaultFOV;
 
-            // Remove from active spotted entities so post-exposure resets and doesn't compound
             if (activeSpottedEntities.Contains(this)) activeSpottedEntities.Remove(this);
 
             RestorePlayerSpeed();
@@ -520,6 +583,14 @@ public class EntitySpot : MonoBehaviour
             {
                 navAgent.enabled = true;
                 navAgent.speed = chaseSpeed;
+            }
+
+            // Start 3D Chase Audio
+            EnsureAudioSource();
+            if (chaseAudioSource != null && chaseFootstepsClip != null)
+            {
+                chaseAudioSource.clip = chaseFootstepsClip;
+                chaseAudioSource.Play();
             }
 
             if (encounterManager != null) encounterManager.StartChaseMusic();
@@ -548,6 +619,9 @@ public class EntitySpot : MonoBehaviour
         sequenceFinished = true;
         isChasing = false;
 
+        if (chaseAudioSource != null && chaseAudioSource.isPlaying)
+            chaseAudioSource.Stop();
+
         if (activeSpottedEntities.Contains(this)) activeSpottedEntities.Remove(this);
         if (playerController != null) playerController.enableSprint = false;
 
@@ -568,7 +642,7 @@ public class EntitySpot : MonoBehaviour
         ResetExposureImmediate();
         RestoreGlobalAtmosphere();
 
-        if (encounterManager != null) encounterManager.StopChaseAndPlayOut();
+        if (encounterManager != null) { encounterManager.StopChaseAndPlayOut(); }
     }
 
     private void SetAlpha(Graphic graphic, float alpha)
@@ -581,6 +655,9 @@ public class EntitySpot : MonoBehaviour
 
     private void OnDisable()
     {
+        if (chaseAudioSource != null && chaseAudioSource.isPlaying)
+            chaseAudioSource.Stop();
+
         if (activeSpottedEntities.Contains(this)) activeSpottedEntities.Remove(this);
         ResetExposureImmediate();
         RestorePlayerSpeed();

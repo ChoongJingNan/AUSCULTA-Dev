@@ -60,6 +60,14 @@ public class EncounterManager : MonoBehaviour
             }
         }
     }
+    private void Start()
+    {
+        // Ensure level background music starts at full volume when the scene loads
+        if (LevelMusicManager.Instance != null)
+        {
+            LevelMusicManager.Instance.SetVolume(1f);
+        }
+    }
 
     public void StartEncounter()
     {
@@ -73,6 +81,7 @@ public class EncounterManager : MonoBehaviour
 
     private IEnumerator IntroRoutine()
     {
+        // Duck background music during the initial reveal sting[cite: 8]
         LevelMusicManager.Instance?.SetVolume(backgroundMusicDuckedVolume);
 
         if (eventMusicSource != null)
@@ -82,6 +91,9 @@ public class EncounterManager : MonoBehaviour
             eventMusicSource.Play();
 
             yield return new WaitForSeconds(inClip.length);
+
+            // Restore level music volume back to full after the intro sting finishes
+            LevelMusicManager.Instance?.SetVolume(1f);
 
             if (encounterStage == 0 && loop1Clip != null)
             {

@@ -303,31 +303,32 @@ public class CultistDialogue1 : MonoBehaviour
         if (option3Button != null) option3Button.gameObject.SetActive(false);
     }
 
-    public void CloseDialogue()
+public void CloseDialogue()
+{
+    if (typingCoroutine != null) StopCoroutine(typingCoroutine);
+    
+    if (audioSource != null && audioSource.isPlaying)
     {
-        if (typingCoroutine != null) StopCoroutine(typingCoroutine);
-        
-        // Stop audio if the player completely leaves or exits dialogue
-        if (audioSource != null && audioSource.isPlaying)
-        {
-            audioSource.Stop();
-        }
-
-        isTyping = false;
-        isWaitingForEnter = false;
-        isShowingOptions = false;
-        isDialogueOpen = false;
-        isInitialGreeting = false;
-
-        if (dialoguePanel != null) dialoguePanel.SetActive(false);
-
-        // Re-enable Camera HUD when exiting dialogue
-        if (cameraHUD != null) cameraHUD.SetHUDActive(true);
-
-        if (playerMouseLookScript != null) playerMouseLookScript.enabled = true;
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-
-        LevelMusicManager.Instance?.SetVolume(normalMusicVolume);
+        audioSource.Stop();
     }
-}
+
+    isTyping = false;
+    isWaitingForEnter = false;
+    isShowingOptions = false;
+    isDialogueOpen = false;
+    isInitialGreeting = false;
+
+    if (dialoguePanel != null) dialoguePanel.SetActive(false);
+
+    // Re-enable Camera HUD when exiting dialogue
+    if (cameraHUD != null) cameraHUD.SetHUDActive(true);
+
+    if (playerMouseLookScript != null) playerMouseLookScript.enabled = true;
+
+    // --- FIX HERE: Re-lock and hide the cursor when exiting via Escape ---
+    Cursor.lockState = CursorLockMode.Locked;
+    Cursor.visible = false;
+
+    LevelMusicManager.Instance?.SetVolume(normalMusicVolume);
+    }
+}   

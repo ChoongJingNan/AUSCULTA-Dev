@@ -12,7 +12,7 @@ public class CheckpointTrigger : MonoBehaviour
         if (other.CompareTag("Player") || other.transform.root.CompareTag("Player"))
         {
             // Save location along with checkpoint index number
-            CheckpointData.SaveCheckpoint(transform.position, SceneManager.GetActiveScene().name, checkpointIndex);
+            CheckpointData.SaveCheckpoint(transform.position, transform.rotation, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, 1);
 
             // Change music immediately in-game
             EncounterManager encounterMgr = FindFirstObjectByType<EncounterManager>();
