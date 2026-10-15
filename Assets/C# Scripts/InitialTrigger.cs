@@ -33,12 +33,10 @@ public class InitialTrigger : MonoBehaviour
                     // If player loaded near this checkpoint spot, bypass encounter & update music via EncounterManager
                     if (distance <= triggerCheckRadius)
                     {
-                        Debug.Log("<color=yellow>INTRO TRIGGER:</color> Loaded checkpoint. Despawning entity & setting post-encounter audio state.");
+                        Debug.Log("<color=yellow>INTRO TRIGGER:</color> Loaded checkpoint. Despawning entity (music is restored by EncounterManager).");
 
-                        if (encounterManager != null)
-                        {
-                            encounterManager.SkipToPostCheckpointState();
-                        }
+                        // Music is NOT touched here: EncounterManager.Start() already restores the
+                        // saved stage's loop, and calling it again here only restarted the track.
 
                         if (entityToDespawn != null)
                         {

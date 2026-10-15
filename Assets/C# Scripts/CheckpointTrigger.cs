@@ -3,22 +3,26 @@ using UnityEngine.SceneManagement;
 
 public class CheckpointTrigger : MonoBehaviour
 {
-    [Header("Checkpoint Config")]
-    [Tooltip("Set to 1 for First Checkpoint, 2 for Second Checkpoint, etc.")]
-    public int checkpointIndex = 1;
+    private bool hasBeenTriggered = false;
+    private string checkpointId;
+
+    private void Awake()
+    {
+        checkpointId = $"{SceneManager.GetActiveScene().name}_{name}_{transform.position}";
+    }
 
     private void OnTriggerEnter(Collider other)
     {
+        if (hasBeenTriggered) return;
+
         if (other.CompareTag("Player") || other.transform.root.CompareTag("Player"))
         {
-            // Save location along with checkpoint index number
-            CheckpointData.SaveCheckpoint(transform.position, transform.rotation, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, 1);
+            hasBeenTriggered = true;
 
-            // Change music immediately in-game
             EncounterManager encounterMgr = FindFirstObjectByType<EncounterManager>();
             if (encounterMgr != null)
             {
-                encounterMgr.PlayCheckpointMusic(checkpointIndex, isInitialSave: true);
+                encounterMgr.TriggerNextDynamicCheckpoint(checkpointId, transform.position, transform.rotation, SceneManager.GetActiveScene().name);
             }
         }
     }

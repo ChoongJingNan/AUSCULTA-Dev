@@ -25,7 +25,6 @@ public class PlayerWaterMovement : MonoBehaviour
     public float swimImpulse = 4f;
     [Tooltip("Damping force so player floats smoothly at surface without bouncing endlessly")]
     public float waterDrag = 3f;
-    public KeyCode swimKey = KeyCode.Space;
 
     private float originalWalkSpeed;
     private float originalSprintSpeed;
@@ -75,7 +74,7 @@ public class PlayerWaterMovement : MonoBehaviour
     private void Update()
     {
         // Spacebar upward swim kick
-        if (currentZone != null && currentZone.depth == WaterZone.WaterDepth.Deep && Input.GetKeyDown(swimKey))
+        if (currentZone != null && currentZone.depth == WaterZone.WaterDepth.Deep && KeyBindings.GetKeyDown(GameAction.Swim))
         {
             if (rb != null)
             {

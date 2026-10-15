@@ -1,9 +1,9 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-
 public class LevelMusicManager : MonoBehaviour
 {
+    
     public static LevelMusicManager Instance { get; private set; }
 
     [Header("Audio Settings")]
@@ -33,34 +33,48 @@ public class LevelMusicManager : MonoBehaviour
         if (musicSource == null) musicSource = GetComponent<AudioSource>();
         musicSource.loop = true;
         musicSource.spatialBlend = 0f;
-        musicSource.volume = defaultVolume;
+        
+        // Pull saved volume from PlayerPrefs, falling back to defaultVolume if it doesn't exist yet
+        float savedVolume = PlayerPrefs.GetFloat("MusicVolume", defaultVolume);
+        musicSource.volume = savedVolume;
     }
 
     private void Start()
-    {
-        // If loading from a valid checkpoint, do NOT force starting level music
-        if (CheckpointData.hasCheckpoint)
         {
-            string savedScene = CheckpointData.GetSavedSceneName();
-            if (!string.IsNullOrEmpty(savedScene) && savedScene == SceneManager.GetActiveScene().name)
+            // If loading from a valid checkpoint, do NOT play default or postCheckpointMusic here;
+            // let EncounterManager fully handle the dynamic checkpoint music loops.
+            if (CheckpointData.hasCheckpoint)
             {
-                if (postCheckpointMusic != null)
+                string savedScene = CheckpointData.GetSavedSceneName();
+                if (!string.IsNullOrEmpty(savedScene) && savedScene == SceneManager.GetActiveScene().name)
                 {
-                    PlayMusic(postCheckpointMusic, fadeDuration);
+                    // Stop any default background music and hand control entirely to EncounterManager
+                    StopMusic();
+                    return; 
                 }
-                return; // Hands music control to EncounterManager or postCheckpointMusic
+            }
+
+            if (levelMusic != null)
+            {
+                PlayMusic(levelMusic, fadeDuration);
             }
         }
 
-        if (levelMusic != null)
-        {
-            PlayMusic(levelMusic, fadeDuration);
-        }
-    }
-
+    public bool suppressLevelMusic = false;
     public void PlayMusic(AudioClip newTrack, float duration = 1.5f)
     {
+        string trackName = newTrack != null ? newTrack.name : "null";
+
+        // Logged only after the early-outs so the console reflects what actually happens.
+        // (Select the log entry and read the bottom pane of the Console for the real call stack.)
+        if (suppressLevelMusic && newTrack == levelMusic)
+        {
+            Debug.Log($"[LevelMusic] PlayMusic({trackName}) IGNORED: level music is suppressed by an active checkpoint stage", this);
+            return;
+        }
         if (musicSource.clip == newTrack && musicSource.isPlaying) return;
+
+        Debug.Log($"[LevelMusic] PlayMusic({trackName}) -> fading in", this);
 
         if (fadeCoroutine != null) StopCoroutine(fadeCoroutine);
         fadeCoroutine = StartCoroutine(FadeToTrack(newTrack, duration));
@@ -91,7 +105,9 @@ public class LevelMusicManager : MonoBehaviour
 
         if (musicSource != null)
         {
-            musicSource.volume = Mathf.Clamp01(targetVolume);
+            // Scale the requested volume by the user's master music slider preference
+            float userMusicPref = PlayerPrefs.GetFloat("MusicVolume", 1f);
+            musicSource.volume = Mathf.Clamp01(targetVolume * userMusicPref);
         }
     }
 
@@ -112,12 +128,19 @@ public class LevelMusicManager : MonoBehaviour
         if (newTrack != null)
         {
             musicSource.Play();
-            // Fade in
+            
+            // Get the current user preference for the fade-in ceiling
+            float userMusicPref = PlayerPrefs.GetFloat("MusicVolume", defaultVolume);
+            float targetPlayVolume = defaultVolume * userMusicPref;
+
+            // Fade in matching the user's saved volume setting
             for (float t = 0; t < duration; t += Time.deltaTime)
             {
-                musicSource.volume = Mathf.Lerp(0f, defaultVolume, t / duration);
+                musicSource.volume = Mathf.Lerp(0f, targetPlayVolume, t / duration);
                 yield return null;
             }
+            
+            musicSource.volume = targetPlayVolume;
         }
 
         fadeCoroutine = null;

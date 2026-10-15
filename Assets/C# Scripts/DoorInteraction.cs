@@ -37,7 +37,7 @@ public class DoorInteraction : MonoBehaviour
         if (!isOpenTriggered && playerTransform != null)
         {
             float distance = Vector3.Distance(transform.position, playerTransform.position);
-            if (distance <= interactionDistance && Input.GetKeyDown(KeyCode.E))
+            if (distance <= interactionDistance && KeyBindings.GetKeyDown(GameAction.Interact))
             {
                 isOpenTriggered = true;
                 InteractWithDoor();

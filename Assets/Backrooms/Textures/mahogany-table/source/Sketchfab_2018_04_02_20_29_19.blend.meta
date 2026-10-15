@@ -3,7 +3,22 @@ guid: ddc3a9af3425a6d4e93d71793eed24e6
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Brass.001
+    second: {fileID: 2100000, guid: 61a5295308e8bb347b96b5e1d6095b45, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Mahogany Sides and Legs
+    second: {fileID: 2100000, guid: a99c5f6caefa3dc48836048b2761259a, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Mahogany Top.001
+    second: {fileID: 2100000, guid: 912e92e3af4827f4197447c335b63b8a, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

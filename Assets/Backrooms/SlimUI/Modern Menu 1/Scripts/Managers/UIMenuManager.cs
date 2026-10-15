@@ -6,21 +6,30 @@ using UnityEngine.SceneManagement;
 
 namespace SlimUI.ModernMenu{
     public class UIMenuManager : MonoBehaviour {
-        // Add this method to UIMenuManager.cs
-public void ResumeGame(string fallbackSceneName = "Level1")
-{
-    string savedScene = CheckpointData.GetSavedSceneName();
-    
-    if (!string.IsNullOrEmpty(savedScene))
+        // Clear previous progress and start a fresh game session
+    public void StartNewGame(string gameSceneName)
     {
-        LoadScene(savedScene);
+        // Wipe all BayatGames save files and progression keys
+        CheckpointData.DeleteSavedData();
+
+        // Load the starting level
+        LoadScene(gameSceneName);
     }
-    else
-    {
-        // Default scene to load if no saved checkpoint exists yet
-        LoadScene(fallbackSceneName);
-    }
-}
+
+        public void ResumeGame(string fallbackSceneName = "Level1")
+        {
+            string savedScene = CheckpointData.GetSavedSceneName();
+            
+            if (!string.IsNullOrEmpty(savedScene))
+            {
+                LoadScene(savedScene);
+            }
+            else
+            {
+                // Default scene to load if no saved checkpoint exists yet
+                LoadScene(fallbackSceneName);
+            }
+        }
         private Animator CameraObject;
 
         // campaign button sub menu
@@ -57,8 +66,6 @@ public void ResumeGame(string fallbackSceneName = "Level1")
         public GameObject PanelKeyBindings;
         [Tooltip("The UI Sub-Panel under KEY BINDINGS for MOVEMENT")]
         public GameObject PanelMovement;
-        [Tooltip("The UI Sub-Panel under KEY BINDINGS for COMBAT")]
-        public GameObject PanelCombat;
         [Tooltip("The UI Sub-Panel under KEY BINDINGS for GENERAL")]
         public GameObject PanelGeneral;
 
@@ -74,8 +81,6 @@ public void ResumeGame(string fallbackSceneName = "Level1")
         public GameObject lineKeyBindings;
         [Tooltip("Highlight Image for when MOVEMENT Sub-Tab is selected in KEY BINDINGS")]
         public GameObject lineMovement;
-        [Tooltip("Highlight Image for when COMBAT Sub-Tab is selected in KEY BINDINGS")]
-        public GameObject lineCombat;
         [Tooltip("Highlight Image for when GENERAL Sub-Tab is selected in KEY BINDINGS")]
         public GameObject lineGeneral;
 
@@ -96,7 +101,17 @@ public void ResumeGame(string fallbackSceneName = "Level1")
         [Tooltip("The GameObject holding the Audio Source component for the SWOOSH SOUND when switching to the Settings Screen")]
         public AudioSource swooshSound;
 
+        private void Update()
+        {
+            // Continuously ensure the cursor is free and visible while in the menu scene
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
         void Start(){
+            // Ensure the cursor is unlocked and visible for menu navigation
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
             CameraObject = transform.GetComponent<Animator>();
 
             playMenu.SetActive(false);
@@ -105,9 +120,18 @@ public void ResumeGame(string fallbackSceneName = "Level1")
             firstMenu.SetActive(true);
             mainMenu.SetActive(true);
 
-            // Hide Options Canvas on start
-            if(optionsCanvas != null) optionsCanvas.SetActive(false);
-            if(mainCanvas != null) mainCanvas.SetActive(true);
+            // Check if we arrived here specifically to open settings from the pause menu
+            if (MenuTransitionData.openSettingsOnLoad)
+            {
+                MenuTransitionData.openSettingsOnLoad = false; // Reset flag
+                Position2(); // Opens the options canvas and triggers the camera animation
+            }
+            else
+            {
+                // Normal start behavior: Hide Options Canvas
+                if(optionsCanvas != null) optionsCanvas.SetActive(false);
+                if(mainCanvas != null) mainCanvas.SetActive(true);
+            }
 
             SetThemeColors();
         }
@@ -169,6 +193,10 @@ public void ResumeGame(string fallbackSceneName = "Level1")
 
         // Called when clicking 'Settings'
         public void Position2(){
+            // Ensure cursor is free when opening settings
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
             DisablePlayCampaign();
 
             if(mainCanvas != null) mainCanvas.SetActive(false);
@@ -181,8 +209,21 @@ public void ResumeGame(string fallbackSceneName = "Level1")
             }
         }
 
-        // Called when clicking 'Return' inside Settings
         public void Position1(){
+            // If we came from the pause menu during gameplay, return back to the game with state restored
+            if (!string.IsNullOrEmpty(MenuTransitionData.previousSceneName))
+            {
+                string gameplayScene = MenuTransitionData.previousSceneName;
+                MenuTransitionData.previousSceneName = ""; 
+                
+                // Tell the gameplay scene to open the pause menu upon loading
+                MenuTransitionData.openPauseMenuOnLoad = true;
+
+                LoadScene(gameplayScene);
+                return;
+            }
+
+            // Normal Main Menu behavior: Just close options and show main canvas[cite: 10]
             if(optionsCanvas != null) optionsCanvas.SetActive(false);
             if(mainCanvas != null) mainCanvas.SetActive(true);
 
@@ -191,69 +232,64 @@ public void ResumeGame(string fallbackSceneName = "Level1")
             }
         }
 
+        // Null-safe helpers so an unassigned (or deleted) panel/line never throws
+        static void Show(GameObject go){ if(go != null) go.SetActive(true); }
+        static void Hide(GameObject go){ if(go != null) go.SetActive(false); }
+
         void DisablePanels(){
-            PanelControls.SetActive(false);
-            PanelVideo.SetActive(false);
-            PanelGame.SetActive(false);
-            PanelKeyBindings.SetActive(false);
+            Hide(PanelControls);
+            Hide(PanelVideo);
+            Hide(PanelGame);
+            Hide(PanelKeyBindings);
 
-            lineGame.SetActive(false);
-            lineControls.SetActive(false);
-            lineVideo.SetActive(false);
-            lineKeyBindings.SetActive(false);
+            Hide(lineGame);
+            Hide(lineControls);
+            Hide(lineVideo);
+            Hide(lineKeyBindings);
 
-            PanelMovement.SetActive(false);
-            lineMovement.SetActive(false);
-            PanelCombat.SetActive(false);
-            lineCombat.SetActive(false);
-            PanelGeneral.SetActive(false);
-            lineGeneral.SetActive(false);
+            Hide(PanelMovement);
+            Hide(lineMovement);
+            Hide(PanelGeneral);
+            Hide(lineGeneral);
         }
 
         public void GamePanel(){
             DisablePanels();
-            PanelGame.SetActive(true);
-            lineGame.SetActive(true);
+            Show(PanelGame);
+            Show(lineGame);
         }
 
         public void VideoPanel(){
             DisablePanels();
-            PanelVideo.SetActive(true);
-            lineVideo.SetActive(true);
+            Show(PanelVideo);
+            Show(lineVideo);
         }
 
         public void ControlsPanel(){
             DisablePanels();
-            PanelControls.SetActive(true);
-            lineControls.SetActive(true);
+            Show(PanelControls);
+            Show(lineControls);
         }
 
         public void KeyBindingsPanel(){
             DisablePanels();
             MovementPanel();
-            PanelKeyBindings.SetActive(true);
-            lineKeyBindings.SetActive(true);
+            Show(PanelKeyBindings);
+            Show(lineKeyBindings);
         }
 
         public void MovementPanel(){
             DisablePanels();
-            PanelKeyBindings.SetActive(true);
-            PanelMovement.SetActive(true);
-            lineMovement.SetActive(true);
-        }
-
-        public void CombatPanel(){
-            DisablePanels();
-            PanelKeyBindings.SetActive(true);
-            PanelCombat.SetActive(true);
-            lineCombat.SetActive(true);
+            Show(PanelKeyBindings);
+            Show(PanelMovement);
+            Show(lineMovement);
         }
 
         public void GeneralPanel(){
             DisablePanels();
-            PanelKeyBindings.SetActive(true);
-            PanelGeneral.SetActive(true);
-            lineGeneral.SetActive(true);
+            Show(PanelKeyBindings);
+            Show(PanelGeneral);
+            Show(lineGeneral);
         }
 
         public void PlayHover(){

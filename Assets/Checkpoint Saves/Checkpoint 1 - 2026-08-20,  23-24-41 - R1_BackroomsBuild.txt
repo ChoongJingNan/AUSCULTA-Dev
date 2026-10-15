@@ -1,5 +1,0 @@
---- CHECKPOINT REACHED ---
-Level Name: R1_BackroomsBuild
-Date & Time: Thursday, 20 August, 2026 11:24 PM
-Coordinates: (5.34, 1.70, 12.20)
-Total Unlocked Checkpoints: 1

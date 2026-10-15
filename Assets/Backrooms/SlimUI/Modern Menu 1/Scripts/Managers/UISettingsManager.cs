@@ -57,17 +57,6 @@ namespace SlimUI.ModernMenu{
 		
 
 		public void  Start (){
-			// check difficulty
-			if(PlayerPrefs.GetInt("NormalDifficulty") == 1){
-				difficultynormaltextLINE.gameObject.SetActive(true);
-				difficultyhardcoretextLINE.gameObject.SetActive(false);
-			}
-			else
-			{
-				difficultyhardcoretextLINE.gameObject.SetActive(true);
-				difficultynormaltextLINE.gameObject.SetActive(false);
-			}
-
 			// check slider values
 			musicSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("MusicVolume");
 			sensitivityXSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("XSensitivity");
@@ -76,26 +65,25 @@ namespace SlimUI.ModernMenu{
 
 			// check full screen
 			if(Screen.fullScreen == true){
-				fullscreentext.GetComponent<TMP_Text>().text = "on";
+				fullscreentext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(Screen.fullScreen == false){
-				fullscreentext.GetComponent<TMP_Text>().text = "off";
+				fullscreentext.GetComponent<TMP_Text>().text = "Off";
 			}
 
-			// check hud value
-			if(PlayerPrefs.GetInt("ShowHUD")==0){
-				showhudtext.GetComponent<TMP_Text>().text = "off";
-			}
-			else{
-				showhudtext.GetComponent<TMP_Text>().text = "on";
+			// check hud value (Ensure it defaults to On if never set or previously cleared)
+			if(!PlayerPrefs.HasKey("ShowHUD"))
+			{
+				PlayerPrefs.SetInt("ShowHUD", 1);
 			}
 
-			// check tool tip value
-			if(PlayerPrefs.GetInt("ToolTips")==0){
-				tooltipstext.GetComponent<TMP_Text>().text = "off";
+			if(PlayerPrefs.GetInt("ShowHUD", 1) == 0)
+			{
+				showhudtext.GetComponent<TMP_Text>().text = "Off";
 			}
-			else{
-				tooltipstext.GetComponent<TMP_Text>().text = "on";
+			else
+			{
+				showhudtext.GetComponent<TMP_Text>().text = "On";
 			}
 
 			// check shadow distance/enabled
@@ -148,34 +136,34 @@ namespace SlimUI.ModernMenu{
 
 			// check vsync
 			if(QualitySettings.vSyncCount == 0){
-				vsynctext.GetComponent<TMP_Text>().text = "off";
+				vsynctext.GetComponent<TMP_Text>().text = "Off";
 			}
 			else if(QualitySettings.vSyncCount == 1){
-				vsynctext.GetComponent<TMP_Text>().text = "on";
+				vsynctext.GetComponent<TMP_Text>().text = "On";
 			}
 
 			// check mouse inverse
 			if(PlayerPrefs.GetInt("Inverted")==0){
-				invertmousetext.GetComponent<TMP_Text>().text = "off";
+				invertmousetext.GetComponent<TMP_Text>().text = "Off";
 			}
 			else if(PlayerPrefs.GetInt("Inverted")==1){
-				invertmousetext.GetComponent<TMP_Text>().text = "on";
+				invertmousetext.GetComponent<TMP_Text>().text = "On";
 			}
 
 			// check motion blur
 			if(PlayerPrefs.GetInt("MotionBlur")==0){
-				motionblurtext.GetComponent<TMP_Text>().text = "off";
+				motionblurtext.GetComponent<TMP_Text>().text = "Off";
 			}
 			else if(PlayerPrefs.GetInt("MotionBlur")==1){
-				motionblurtext.GetComponent<TMP_Text>().text = "on";
+				motionblurtext.GetComponent<TMP_Text>().text = "On";
 			}
 
 			// check ambient occlusion
 			if(PlayerPrefs.GetInt("AmbientOcclusion")==0){
-				ambientocclusiontext.GetComponent<TMP_Text>().text = "off";
+				ambientocclusiontext.GetComponent<TMP_Text>().text = "Off";
 			}
 			else if(PlayerPrefs.GetInt("AmbientOcclusion")==1){
-				ambientocclusiontext.GetComponent<TMP_Text>().text = "on";
+				ambientocclusiontext.GetComponent<TMP_Text>().text = "On";
 			}
 
 			// check texture quality
@@ -217,9 +205,18 @@ namespace SlimUI.ModernMenu{
 			}
 		}
 
-		public void MusicSlider (){
-			//PlayerPrefs.SetFloat("MusicVolume", sliderValue);
-			PlayerPrefs.SetFloat("MusicVolume", musicSlider.GetComponent<Slider>().value);
+		public void MusicSlider ()
+		{
+			float sliderValue = musicSlider.GetComponent<Slider>().value;
+
+			// Save preference
+			PlayerPrefs.SetFloat("MusicVolume", sliderValue);
+
+			// If LevelMusicManager is active in the scene, update its volume live
+			if (LevelMusicManager.Instance != null && LevelMusicManager.Instance.musicSource != null)
+			{
+				LevelMusicManager.Instance.musicSource.volume = sliderValue;
+			}
 		}
 
 		public void SensitivityXSlider (){
@@ -236,14 +233,37 @@ namespace SlimUI.ModernMenu{
 		}
 
 		// the playerprefs variable that is checked to enable hud while in game
-		public void ShowHUD (){
-			if(PlayerPrefs.GetInt("ShowHUD")==0){
-				PlayerPrefs.SetInt("ShowHUD",1);
-				showhudtext.GetComponent<TMP_Text>().text = "on";
+		public void ShowHUD ()
+		{
+			// Get the current state, treating an uninitialized key (0) as 1 (on) by default
+			int currentHudState = PlayerPrefs.GetInt("ShowHUD", 1);
+
+			// Toggle between 0 (off) and 1 (on)
+			if(currentHudState == 1)
+			{
+				PlayerPrefs.SetInt("ShowHUD", 0);
+				showhudtext.GetComponent<TMP_Text>().text = "Off";
 			}
-			else if(PlayerPrefs.GetInt("ShowHUD")==1){
-				PlayerPrefs.SetInt("ShowHUD",0);
-				showhudtext.GetComponent<TMP_Text>().text = "off";
+			else
+			{
+				PlayerPrefs.SetInt("ShowHUD", 1);
+				showhudtext.GetComponent<TMP_Text>().text = "On";
+			}
+
+			PlayerPrefs.Save(); // Good practice to ensure it writes immediately
+
+			// Apply the change live to your Camera HUD in the scene
+			ApplyHUDState();
+		}
+
+		// Helper method to find and apply the HUD state
+		private void ApplyHUDState()
+		{
+			bool isHudOn = PlayerPrefs.GetInt("ShowHUD", 1) == 1;
+			GameObject cameraHUD = GameObject.Find("CameraHUD"); // Replace with your actual HUD GameObject name if different
+			if (cameraHUD != null)
+			{
+				cameraHUD.SetActive(isHudOn);
 			}
 		}
 
@@ -280,20 +300,6 @@ namespace SlimUI.ModernMenu{
 				PlayerPrefs.SetInt("ToolTips",0);
 				tooltipstext.GetComponent<TMP_Text>().text = "off";
 			}
-		}
-
-		public void NormalDifficulty (){
-			difficultyhardcoretextLINE.gameObject.SetActive(false);
-			difficultynormaltextLINE.gameObject.SetActive(true);
-			PlayerPrefs.SetInt("NormalDifficulty",1);
-			PlayerPrefs.SetInt("HardCoreDifficulty",0);
-		}
-
-		public void HardcoreDifficulty (){
-			difficultyhardcoretextLINE.gameObject.SetActive(true);
-			difficultynormaltextLINE.gameObject.SetActive(false);
-			PlayerPrefs.SetInt("NormalDifficulty",0);
-			PlayerPrefs.SetInt("HardCoreDifficulty",1);
 		}
 
 		public void ShadowsOff (){
@@ -353,22 +359,22 @@ namespace SlimUI.ModernMenu{
 		public void vsync (){
 			if(QualitySettings.vSyncCount == 0){
 				QualitySettings.vSyncCount = 1;
-				vsynctext.GetComponent<TMP_Text>().text = "on";
+				vsynctext.GetComponent<TMP_Text>().text = "ON";
 			}
 			else if(QualitySettings.vSyncCount == 1){
 				QualitySettings.vSyncCount = 0;
-				vsynctext.GetComponent<TMP_Text>().text = "off";
+				vsynctext.GetComponent<TMP_Text>().text = "OFF";
 			}
 		}
 
 		public void InvertMouse (){
 			if(PlayerPrefs.GetInt("Inverted")==0){
 				PlayerPrefs.SetInt("Inverted",1);
-				invertmousetext.GetComponent<TMP_Text>().text = "on";
+				invertmousetext.GetComponent<TMP_Text>().text = "ON";
 			}
 			else if(PlayerPrefs.GetInt("Inverted")==1){
 				PlayerPrefs.SetInt("Inverted",0);
-				invertmousetext.GetComponent<TMP_Text>().text = "off";
+				invertmousetext.GetComponent<TMP_Text>().text = "OFF";
 			}
 		}
 
@@ -414,6 +420,7 @@ namespace SlimUI.ModernMenu{
 		}
 
 		public void TexturesMed (){
+			PlayerPrefs.SetInt("Testing",1);
 			PlayerPrefs.SetInt("Textures",1);
 			QualitySettings.globalTextureMipmapLimit = 1;
 			texturelowtextLINE.gameObject.SetActive(false);

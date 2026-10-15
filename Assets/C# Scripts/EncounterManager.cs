@@ -1,8 +1,13 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 
 public class EncounterManager : MonoBehaviour
 {
+    private HashSet<string> triggeredCheckpointIds = new HashSet<string>();
+    private int globalCheckpointSequence = 0;
+
     [Header("Audio Sources")]
     [Tooltip("AudioSource dedicated to playing event overlays, stage loops, and chase tracks")]
     public AudioSource eventMusicSource;        
@@ -10,11 +15,11 @@ public class EncounterManager : MonoBehaviour
     [Header("Audio Clips")]
     [Tooltip("Main ambient level music track (e.g. One_Loop) to restore when starting or resetting the Backrooms")]
     public AudioClip defaultLevelMusic; 
-    public AudioClip inClip;      // Plays during first checkpoint initial transition ("Something's Wrong In")
-    public AudioClip loop1Clip;   // Plays during first checkpoint loop ("Something's Wrong Loop1")
-    public AudioClip loop2Clip;   // Plays for Checkpoint 2
-    public AudioClip loop3Clip;   // Plays for Checkpoint 3
-    public AudioClip loop4Clip;   // Plays for Checkpoint 4
+    public AudioClip inClip;      
+    public AudioClip loop1Clip;   
+    public AudioClip loop2Clip;   
+    public AudioClip loop3Clip;   
+    public AudioClip loop4Clip;   
     public AudioClip chaseClip;                 
     public AudioClip outClip;
 
@@ -22,26 +27,59 @@ public class EncounterManager : MonoBehaviour
     [Tooltip("Volume level background music ducks to when an event begins")]
     public float backgroundMusicDuckedVolume = 0.2f;
 
-    private int encounterStage = 0; 
-    private int vanishedEntitiesCount = 0; 
     public bool introStarted = false; 
-
     private Coroutine introCoroutine;
 
+    // Volume the event source was authored at in the inspector. The user's saved
+    // MusicVolume preference is multiplied on top of this every time a clip starts.
+    private float eventBaseVolume = 1f;
+
     /// <summary>
-    /// Resets all encounter tracking, stage state, and audio routing to clean default settings.
+    /// True when a saved checkpoint exists AND it belongs to the scene that is currently loaded.
+    /// </summary>
+    private static bool HasCheckpointForThisScene()
+    {
+        if (!CheckpointData.hasCheckpoint) return false;
+        string savedScene = CheckpointData.GetSavedSceneName();
+        return !string.IsNullOrEmpty(savedScene) && savedScene == SceneManager.GetActiveScene().name;
+    }
+
+    /// <summary>
+    /// Reloads the saved stage + triggered IDs from disk and plays that stage's loop (no intro).
+    /// Safe to call more than once: if the right loop is already playing it is left alone.
+    /// </summary>
+    private void RestoreFromSavedCheckpoint()
+    {
+        globalCheckpointSequence = CheckpointData.GetSavedCheckpointIndex();
+        triggeredCheckpointIds = CheckpointData.LoadTriggeredIds();
+        PlayCheckpointMusic(globalCheckpointSequence, isInitialSave: false);
+    }
+
+    /// <summary>
+    /// Resets encounter tracking, stage state, and audio routing.
+    /// If a checkpoint is saved for this scene, the saved stage is restored instead of wiped,
+    /// so a scene reload / save room return never throws away checkpoint progress.
     /// </summary>
     public void ResetEncounterState()
     {
+        Debug.Log($"[EncounterManager] ResetEncounterState() in scene '{SceneManager.GetActiveScene().name}' | checkpointForThisScene={HasCheckpointForThisScene()}", this);
+
         if (introCoroutine != null)
         {
             StopCoroutine(introCoroutine);
             introCoroutine = null;
         }
 
+        if (HasCheckpointForThisScene())
+        {
+            RestoreFromSavedCheckpoint();
+            return;
+        }
+
+        // ---- No checkpoint for this scene: full wipe back to the default level music ----
         introStarted = false;
-        encounterStage = 0;
-        vanishedEntitiesCount = 0;
+        globalCheckpointSequence = 0;
+        triggeredCheckpointIds.Clear();
 
         if (eventMusicSource != null)
         {
@@ -49,9 +87,10 @@ public class EncounterManager : MonoBehaviour
             eventMusicSource.clip = null;
         }
 
-        // Restore central level background music track & volume
         if (LevelMusicManager.Instance != null)
         {
+            // Un-suppress, otherwise PlayMusic(defaultLevelMusic) is silently ignored
+            LevelMusicManager.Instance.suppressLevelMusic = false;
             LevelMusicManager.Instance.SetVolume(1f);
 
             if (defaultLevelMusic != null)
@@ -60,12 +99,63 @@ public class EncounterManager : MonoBehaviour
             }
         }
     }
+
+    private void Awake()
+    {
+        if (eventMusicSource != null)
+        {
+            eventMusicSource.spatialBlend = 0f;
+            eventBaseVolume = eventMusicSource.volume;
+        }
+    }
+
     private void Start()
     {
-        // Ensure level background music starts at full volume when the scene loads
-        if (LevelMusicManager.Instance != null)
+        if (HasCheckpointForThisScene())
         {
-            LevelMusicManager.Instance.SetVolume(1f);
+            if (LevelMusicManager.Instance != null)
+            {
+                LevelMusicManager.Instance.StopMusic();
+            }
+
+            RestoreFromSavedCheckpoint();
+        }
+        else
+        {
+            globalCheckpointSequence = 0;
+            triggeredCheckpointIds.Clear();
+
+            if (LevelMusicManager.Instance != null)
+            {
+                LevelMusicManager.Instance.suppressLevelMusic = false;
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Event music helpers
+    // ------------------------------------------------------------------
+
+    /// <summary>Starts a clip on the event source at (authored volume x user music preference).</summary>
+    private void PlayEventClip(AudioClip clip, bool loop)
+    {
+        if (eventMusicSource == null || clip == null) return;
+
+        eventMusicSource.Stop();
+        eventMusicSource.volume = eventBaseVolume * PlayerPrefs.GetFloat("MusicVolume", 1f);
+        eventMusicSource.clip = clip;
+        eventMusicSource.loop = loop;
+        eventMusicSource.Play();
+    }
+
+    private AudioClip GetLoopClip(int stage)
+    {
+        switch (stage)
+        {
+            case 1: return loop1Clip;
+            case 2: return loop2Clip;
+            case 3: return loop3Clip;
+            default: return loop4Clip;
         }
     }
 
@@ -73,42 +163,65 @@ public class EncounterManager : MonoBehaviour
     {
         if (introStarted) return;
         introStarted = true;
-        encounterStage = 0;
-        vanishedEntitiesCount = 0;
         
         introCoroutine = StartCoroutine(IntroRoutine());
     }
 
     private IEnumerator IntroRoutine()
     {
-        // Duck background music during the initial reveal sting[cite: 8]
         LevelMusicManager.Instance?.SetVolume(backgroundMusicDuckedVolume);
 
-        if (eventMusicSource != null)
+        if (eventMusicSource != null && inClip != null)
         {
-            eventMusicSource.clip = inClip;
-            eventMusicSource.loop = false;
-            eventMusicSource.Play();
+            PlayEventClip(inClip, false);
 
             yield return new WaitForSeconds(inClip.length);
 
-            // Restore level music volume back to full after the intro sting finishes
-            LevelMusicManager.Instance?.SetVolume(1f);
+            // Default level music (One_Loop) hands over to the stage loop
+            LevelMusicManager.Instance?.StopMusic();
 
-            if (encounterStage == 0 && loop1Clip != null)
+            if (globalCheckpointSequence <= 1 && loop1Clip != null)
             {
-                eventMusicSource.clip = loop1Clip;
-                eventMusicSource.loop = true;
-                eventMusicSource.Play();
+                PlayEventClip(loop1Clip, true);
             }
         }
 
         introCoroutine = null;
     }
 
+    public void TriggerNextDynamicCheckpoint(string checkpointId, Vector3 position, Quaternion rotation, string sceneName)
+    {
+        Debug.Log($"[Checkpoint] id={checkpointId} | stage now={globalCheckpointSequence} | already used={triggeredCheckpointIds.Contains(checkpointId)}");
+        // Already reached (respawned inside it, or walked back through it)
+        if (!triggeredCheckpointIds.Add(checkpointId)) return;
+
+        int previousStage = globalCheckpointSequence;
+        int targetStage = Mathf.Clamp(previousStage + 1, 1, 4);
+        globalCheckpointSequence = targetStage;
+
+        CheckpointData.SaveCheckpoint(position, rotation, sceneName, targetStage);
+        CheckpointData.SaveTriggeredIds(triggeredCheckpointIds);
+
+        // Already at the last stage: save the new position, keep the music running
+        if (targetStage == previousStage) return;
+
+        // Stage 1 after an entity spot already started In -> Loop 1: don't restart it
+        bool introAlreadyHandlingMusic = (targetStage == 1 && introStarted);
+        if (!introAlreadyHandlingMusic)
+        {
+            PlayCheckpointMusic(targetStage, isInitialSave: true);
+        }
+    }
+
     public void PlayCheckpointMusic(int checkpointIndex, bool isInitialSave = false)
     {
+        globalCheckpointSequence = checkpointIndex;
+
+        PlayerPrefs.SetInt("SavedCheckpointIndex", checkpointIndex);
+        PlayerPrefs.Save();
+
         LevelMusicManager.Instance?.StopMusic();
+        if (LevelMusicManager.Instance != null) LevelMusicManager.Instance.suppressLevelMusic = true;
 
         if (introCoroutine != null)
         {
@@ -120,65 +233,36 @@ public class EncounterManager : MonoBehaviour
 
         if (eventMusicSource == null) return;
 
+        AudioClip targetLoop = GetLoopClip(checkpointIndex);
+
+        // Restoring a saved stage and the right loop is already playing: leave it alone
+        if (!isInitialSave && targetLoop != null &&
+            eventMusicSource.isPlaying && eventMusicSource.clip == targetLoop && eventMusicSource.loop)
+        {
+            return;
+        }
+
         eventMusicSource.Stop();
 
-        switch (checkpointIndex)
+        if (checkpointIndex == 1 && isInitialSave && inClip != null)
         {
-            case 1:
-                if (isInitialSave && inClip != null)
-                {
-                    introCoroutine = StartCoroutine(PlayIntroThenLoop(inClip, loop1Clip));
-                }
-                else if (loop1Clip != null)
-                {
-                    eventMusicSource.clip = loop1Clip;
-                    eventMusicSource.loop = true;
-                    eventMusicSource.Play();
-                }
-                break;
-
-            case 2:
-                if (loop2Clip != null)
-                {
-                    eventMusicSource.clip = loop2Clip;
-                    eventMusicSource.loop = true;
-                    eventMusicSource.Play();
-                }
-                break;
-
-            case 3:
-                if (loop3Clip != null)
-                {
-                    eventMusicSource.clip = loop3Clip;
-                    eventMusicSource.loop = true;
-                    eventMusicSource.Play();
-                }
-                break;
-
-            default:
-                if (loop4Clip != null)
-                {
-                    eventMusicSource.clip = loop4Clip;
-                    eventMusicSource.loop = true;
-                    eventMusicSource.Play();
-                }
-                break;
+            introCoroutine = StartCoroutine(PlayIntroThenLoop(inClip, loop1Clip));
+        }
+        else if (targetLoop != null)
+        {
+            PlayEventClip(targetLoop, true);
         }
     }
 
     private IEnumerator PlayIntroThenLoop(AudioClip intro, AudioClip loop)
     {
-        eventMusicSource.clip = intro;
-        eventMusicSource.loop = false;
-        eventMusicSource.Play();
+        PlayEventClip(intro, false);
 
         yield return new WaitForSeconds(intro.length);
 
         if (loop != null)
         {
-            eventMusicSource.clip = loop;
-            eventMusicSource.loop = true;
-            eventMusicSource.Play();
+            PlayEventClip(loop, true);
         }
 
         introCoroutine = null;
@@ -186,44 +270,11 @@ public class EncounterManager : MonoBehaviour
 
     public void SkipToPostCheckpointState()
     {
-        PlayCheckpointMusic(1, isInitialSave: false);
+        // Restore the SAVED stage instead of forcing stage 1
+        PlayCheckpointMusic(CheckpointData.GetSavedCheckpointIndex(), isInitialSave: false);
     }
 
-    public void AdvanceMusicStage()
-    {
-        vanishedEntitiesCount++;
-
-        if (vanishedEntitiesCount <= 1) return;
-
-        encounterStage++;
-
-        if (introCoroutine != null)
-        {
-            StopCoroutine(introCoroutine);
-            introCoroutine = null;
-        }
-
-        if (eventMusicSource == null) return;
-
-        if (encounterStage == 1 && loop2Clip != null)
-        {
-            eventMusicSource.clip = loop2Clip;
-            eventMusicSource.loop = true;
-            eventMusicSource.Play();
-        }
-        else if (encounterStage == 2 && loop3Clip != null)
-        {
-            eventMusicSource.clip = loop3Clip;
-            eventMusicSource.loop = true;
-            eventMusicSource.Play();
-        }
-        else if (encounterStage >= 3 && loop4Clip != null)
-        {
-            eventMusicSource.clip = loop4Clip;
-            eventMusicSource.loop = true;
-            eventMusicSource.Play();
-        }
-    }
+    public void AdvanceMusicStage() { }
 
     public void StartChaseMusic()
     {
@@ -231,10 +282,7 @@ public class EncounterManager : MonoBehaviour
 
         if (eventMusicSource != null && chaseClip != null)
         {
-            eventMusicSource.Stop();
-            eventMusicSource.clip = chaseClip;
-            eventMusicSource.loop = true;
-            eventMusicSource.Play();
+            PlayEventClip(chaseClip, true);
         }
     }
 

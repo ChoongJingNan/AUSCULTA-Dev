@@ -128,7 +128,7 @@ public class CultistDialogue1 : MonoBehaviour
         // Open Dialogue
         if (isPlayerNearby && !isDialogueOpen)
         {
-            if (Input.GetKeyDown(KeyCode.E))
+            if (KeyBindings.GetKeyDown(GameAction.Interact))
             {
                 OpenDialogue();
                 return;
@@ -154,14 +154,14 @@ public class CultistDialogue1 : MonoBehaviour
             }
 
             // 1. Fast forward typewriter effect without stopping NPC audio
-            if (isTyping && Input.GetKeyDown(KeyCode.E))
+            if (isTyping && KeyBindings.GetKeyDown(GameAction.Interact))
             {
                 FinishTypingInstantly();
                 return;
             }
 
             // 2. Transition from initial greeting to response choices
-            if (isWaitingForEnter && Input.GetKeyDown(KeyCode.E))
+            if (isWaitingForEnter && KeyBindings.GetKeyDown(GameAction.Interact))
             {
                 isWaitingForEnter = false;
                 ShowOptions();
@@ -331,4 +331,4 @@ public void CloseDialogue()
 
     LevelMusicManager.Instance?.SetVolume(normalMusicVolume);
     }
-}   
+}

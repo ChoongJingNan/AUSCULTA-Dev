@@ -145,14 +145,20 @@ public class ModernCameraHUD : MonoBehaviour
             }
         }
     }
-
+    [Header("Pause State")]
+    public bool isPaused = false;
     private void Update()
     {
+        // Always keep FPS and Date/Time running in the background
+        UpdatePerformanceReadout();
+        UpdateDateTime();
+
+        // If paused, freeze the timer, battery drain, and REC blinking
+        if (isPaused) return;
+
         UpdateRecBlink();
         UpdatePlaytime();
         UpdateBatteryHUD();
-        UpdatePerformanceReadout();
-        UpdateDateTime();
     }
 
     private void UpdateRecBlink()
@@ -213,7 +219,9 @@ public class ModernCameraHUD : MonoBehaviour
             batteryPercentText.text = $"{Mathf.FloorToInt(displayBatteryPercent)}%";
         }
 
-        int activeCells = Mathf.Clamp(currentHp, 0, batteryCells.Length);
+        // Bars follow the displayed battery percentage (so natural drain lowers them too).
+        // 100-76% = 4 bars, 75-51% = 3, 50-26% = 2, 25-1% = 1, 0% = none
+        int activeCells = Mathf.Clamp(Mathf.CeilToInt(displayBatteryPercent / 100f * batteryCells.Length), 0, batteryCells.Length);
 
         for (int i = 0; i < batteryCells.Length; i++)
         {

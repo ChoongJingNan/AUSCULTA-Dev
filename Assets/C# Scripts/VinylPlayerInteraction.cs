@@ -4,7 +4,6 @@ public class VinylPlayerInteraction : MonoBehaviour
 {
     [Header("Interaction Settings")]
     public float interactionDistance = 3.0f;
-    public KeyCode interactKey = KeyCode.E;
 
     [Header("Audio (Optional)")]
     [Tooltip("Assign an AudioSource if you want music to play when it spins")]
@@ -39,7 +38,7 @@ public class VinylPlayerInteraction : MonoBehaviour
         float distance = Vector3.Distance(transform.position, playerTransform.position);
 
         // Check if the player is close enough and presses 'E'
-        if (distance <= interactionDistance && Input.GetKeyDown(interactKey))
+        if (distance <= interactionDistance && KeyBindings.GetKeyDown(GameAction.Interact))
         {
             // We only want to trigger the animation once
             if (!isPlaying)

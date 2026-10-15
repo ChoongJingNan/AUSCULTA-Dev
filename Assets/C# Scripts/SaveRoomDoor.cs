@@ -11,7 +11,6 @@ public class SaveRoomDoor : MonoBehaviour
 
     [Header("Interaction Settings")]
     public float interactionDistance = 3.0f;
-    public KeyCode interactKey = KeyCode.E;
 
     [Header("UI Settings")]
     [Tooltip("Drag a simple UI Image here (color set to black)")]
@@ -40,7 +39,7 @@ public class SaveRoomDoor : MonoBehaviour
 
         float distance = Vector3.Distance(transform.position, playerTransform.position);
         
-        if (distance <= interactionDistance && Input.GetKeyDown(interactKey))
+        if (distance <= interactionDistance && KeyBindings.GetKeyDown(GameAction.Interact))
         {
             StartCoroutine(TransitionToSaveRoom());
         }
