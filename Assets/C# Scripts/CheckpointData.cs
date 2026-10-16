@@ -31,6 +31,7 @@ public static class CheckpointData
     private const string POS_KEY = "Saved_Player_Position";
     private const string ROT_KEY = "Saved_Player_Rotation";
     private const string INDEX_KEY = "Saved_Checkpoint_Index";
+    private const string TIME_KEY = "Saved_Session_Time";
 
     public static bool hasCheckpoint => SaveGame.Exists(POS_KEY) && SaveGame.Exists(SCENE_KEY);
 
@@ -42,6 +43,7 @@ public static class CheckpointData
         SaveGame.Save(ROT_KEY, rotation);
         SaveGame.Save(SCENE_KEY, sceneName);
         SaveGame.Save(INDEX_KEY, checkpointIndex);
+        SaveGame.Save(TIME_KEY, ModernCameraHUD.SessionTime);
 
         // Force sync to PlayerPrefs so EncounterManager grabs the correct stage index instantly
         PlayerPrefs.SetInt("SavedCheckpointIndex", checkpointIndex);
@@ -82,6 +84,8 @@ public static class CheckpointData
         PlayerPrefs.DeleteKey("SavedCheckpointIndex");
         PlayerPrefs.Save();
         SaveGame.Delete(IDS_KEY);
+        SaveGame.Delete(TIME_KEY);
+        LastMapTracker.Clear();
 
         Debug.Log("<color=yellow>[CheckpointData] Save data deleted.</color>");
     }
@@ -108,5 +112,46 @@ public static class CheckpointData
         if (controller != null) controller.enabled = true;
 
         return true;
+    }
+    public static void RestoreSavedTimer()
+    {
+        if (SaveGame.Exists(TIME_KEY))
+            ModernCameraHUD.SessionTime = SaveGame.Load<float>(TIME_KEY, 0f);
+    }
+    public static bool TryGetSavedPose(out Vector3 pos, out Quaternion rot)
+{
+    pos = Vector3.zero; rot = Quaternion.identity;
+    if (!hasCheckpoint) return false;
+    pos = SaveGame.Load<Vector3>(POS_KEY);
+    rot = SaveGame.Load<Quaternion>(ROT_KEY);
+    return true;
+}
+
+    public static void ApplySlot(SaveSlotData d)
+    {
+        DeleteSavedData();
+        SaveRoomData.ClearReturnPoint();
+
+        // Clear leftover pause/settings transition flags so they can't block the teleport
+        MenuTransitionData.hasSavedPosition = false;
+        MenuTransitionData.openPauseMenuOnLoad = false;
+        MenuTransitionData.openSettingsOnLoad = false;
+        MenuTransitionData.previousSceneName = "";
+
+        if (d.hasCheckpoint)
+        {
+            SaveGame.Save(POS_KEY, d.position);
+            SaveGame.Save(ROT_KEY, d.rotation);
+            SaveGame.Save(SCENE_KEY, d.sceneName);
+            SaveGame.Save(INDEX_KEY, d.checkpointIndex);
+            PlayerPrefs.SetInt("SavedCheckpointIndex", d.checkpointIndex);
+            PlayerPrefs.Save();
+            SaveTriggeredIds(new HashSet<string>(d.triggeredIds ?? new string[0]));
+            SaveGame.Save(TIME_KEY, d.playTimeSeconds);
+        }
+        else
+        {
+            SaveRoomData.SaveReturnPoint(d.sceneName, d.position, d.rotation);
+        }
     }
 }

@@ -42,7 +42,11 @@ public class FaceTransition : MonoBehaviour
     {
         if (faceRevealImage != null) faceRevealImage.gameObject.SetActive(false);
 
-        if (fadeInOnStart && blackScreenImage != null)
+        // Returning from Settings (pause menu) reloads this scene with the pause menu already open.
+        // Playing the black fade-in again would cover the pause menu, so skip it in that case.
+        bool skipFade = MenuTransitionData.skipSceneFadeIn;
+
+        if (fadeInOnStart && blackScreenImage != null && !skipFade)
         {
             StartCoroutine(FadeInSequence());
         }
@@ -60,7 +64,8 @@ public class FaceTransition : MonoBehaviour
         float elapsed = 0f;
         while (elapsed < fadeInDuration)
         {
-            elapsed += Time.deltaTime;
+            // Unscaled: the fade must still finish if Time.timeScale is 0 (e.g. pause menu open)
+            elapsed += Time.unscaledDeltaTime;
             float alpha = 1f - Mathf.Clamp01(elapsed / fadeInDuration);
             blackScreenImage.color = new Color(0f, 0f, 0f, alpha);
             yield return null;

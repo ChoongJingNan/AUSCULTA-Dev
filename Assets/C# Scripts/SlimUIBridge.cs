@@ -14,6 +14,9 @@ public class SlimUIBridge : MonoBehaviour
     [Tooltip("Drag SlimUI's 'Continue' or 'Load' button here to disable it if no save exists")]
     public GameObject loadGameButton;
 
+    [Tooltip("A SaveSlotPanel set to Mode = Load. The Load Game button should call OpenLoadMenu().")]
+    public SaveSlotPanel loadSlotPanel;
+
     private void Awake()
     {
         UnlockCursor();
@@ -29,11 +32,8 @@ public class SlimUIBridge : MonoBehaviour
         }
 
         // Disable Continue button if no save exists
-        string savedScene = CheckpointData.GetSavedSceneName();
-        if (string.IsNullOrEmpty(savedScene) && loadGameButton != null)
-        {
-            loadGameButton.SetActive(false);
-        }
+        if (!SaveSlotManager.AnySlotExists() && loadGameButton != null)
+        loadGameButton.SetActive(false);
     }
 
     private void Update()
@@ -55,6 +55,7 @@ public class SlimUIBridge : MonoBehaviour
     {
         Time.timeScale = 1.0f;
         CheckpointData.DeleteSavedData();
+        ModernCameraHUD.SessionTime = 0f;
 
         if (uiMenuManager != null)
         {
@@ -66,10 +67,17 @@ public class SlimUIBridge : MonoBehaviour
         }
     }
 
+    // Hook the main menu's "Load Game" button to this
+    public void OpenLoadMenu()
+    {
+        if (loadSlotPanel != null) loadSlotPanel.Open();
+        else LoadLastSave();
+    }
+
     public void LoadLastSave()
     {
         Time.timeScale = 1.0f;
-
+        CheckpointData.RestoreSavedTimer();
         string lastSavedScene = CheckpointData.GetSavedSceneName();
         if (string.IsNullOrEmpty(lastSavedScene))
         {

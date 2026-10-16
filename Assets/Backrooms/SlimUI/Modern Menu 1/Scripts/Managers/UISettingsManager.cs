@@ -49,6 +49,8 @@ namespace SlimUI.ModernMenu{
 		public GameObject sensitivityXSlider;
 		public GameObject sensitivityYSlider;
 		public GameObject mouseSmoothSlider;
+		public GameObject masterSlider;
+		public GameObject sfxSlider;
 
 		private float sliderValue = 0.0f;
 		private float sliderValueXSensitivity = 0.0f;
@@ -57,12 +59,12 @@ namespace SlimUI.ModernMenu{
 		
 
 		public void  Start (){
-			// check slider values
-			musicSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("MusicVolume");
-			sensitivityXSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("XSensitivity");
-			sensitivityYSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("YSensitivity");
-			mouseSmoothSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("MouseSmoothing");
-
+			if (masterSlider != null) masterSlider.GetComponent<Slider>().value = GameAudioSettings.Master;
+			if (sfxSlider != null) sfxSlider.GetComponent<Slider>().value = GameAudioSettings.Sfx;
+			musicSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("MusicVolume", 1f);
+			sensitivityXSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("XSensitivity", 2f);
+			sensitivityYSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("YSensitivity", 2f);
+			mouseSmoothSlider.GetComponent<Slider>().value = PlayerPrefs.GetFloat("MouseSmoothing", 0f);
 			// check full screen
 			if(Screen.fullScreen == true){
 				fullscreentext.GetComponent<TMP_Text>().text = "On";
@@ -186,7 +188,29 @@ namespace SlimUI.ModernMenu{
 				texturehightextLINE.gameObject.SetActive(true);
 			}
 		}
+		public void MasterSlider(){ 
+			GameAudioSettings.SetMaster(masterSlider.GetComponent<Slider>().value);
+			}
+		public void SFXSlider(){ 
+			GameAudioSettings.SetSfx(sfxSlider.GetComponent<Slider>().value);
+			}
+		public void SensitivityXSlider()
+			{
+			PlayerPrefs.SetFloat("XSensitivity", sensitivityXSlider.GetComponent<Slider>().value);
+			PlayerPrefs.Save();
+			}
 
+		public void SensitivityYSlider()
+		{
+			PlayerPrefs.SetFloat("YSensitivity", sensitivityYSlider.GetComponent<Slider>().value);
+			PlayerPrefs.Save();
+		}
+
+		public void SensitivitySmoothing()
+		{
+			PlayerPrefs.SetFloat("MouseSmoothing", mouseSmoothSlider.GetComponent<Slider>().value);
+			PlayerPrefs.Save();
+		}
 		public void Update (){
 			//sliderValue = musicSlider.GetComponent<Slider>().value;
 			sliderValueXSensitivity = sensitivityXSlider.GetComponent<Slider>().value;
@@ -195,41 +219,23 @@ namespace SlimUI.ModernMenu{
 		}
 
 		public void FullScreen (){
-			Screen.fullScreen = !Screen.fullScreen;
-
-			if(Screen.fullScreen == true){
-				fullscreentext.GetComponent<TMP_Text>().text = "on";
-			}
-			else if(Screen.fullScreen == false){
-				fullscreentext.GetComponent<TMP_Text>().text = "off";
-			}
+			// In a build Screen.fullScreen only changes at the end of the frame, so reading it
+			// straight after setting it returns the OLD value (that reversed the label).
+			// Work out the new state first and use that for both the screen and the text.
+			bool goFullscreen = !Screen.fullScreen;
+			Screen.fullScreen = goFullscreen;
+			fullscreentext.GetComponent<TMP_Text>().text = goFullscreen ? "On" : "Off";
 		}
-
-		public void MusicSlider ()
+		public void MusicSlider()
 		{
-			float sliderValue = musicSlider.GetComponent<Slider>().value;
+			float v = musicSlider.GetComponent<Slider>().value;
+			PlayerPrefs.SetFloat("MusicVolume", v);
+			PlayerPrefs.Save();
 
-			// Save preference
-			PlayerPrefs.SetFloat("MusicVolume", sliderValue);
-
-			// If LevelMusicManager is active in the scene, update its volume live
-			if (LevelMusicManager.Instance != null && LevelMusicManager.Instance.musicSource != null)
-			{
-				LevelMusicManager.Instance.musicSource.volume = sliderValue;
-			}
-		}
-
-		public void SensitivityXSlider (){
-			PlayerPrefs.SetFloat("XSensitivity", sliderValueXSensitivity);
-		}
-
-		public void SensitivityYSlider (){
-			PlayerPrefs.SetFloat("YSensitivity", sliderValueYSensitivity);
-		}
-
-		public void SensitivitySmoothing (){
-			PlayerPrefs.SetFloat("MouseSmoothing", sliderValueSmoothing);
-			Debug.Log(PlayerPrefs.GetFloat("MouseSmoothing"));
+			LevelMusicManager.Instance?.RefreshVolume();
+			MenuBackgroundLoader.RefreshMusicVolume(); // music playing behind the main menu
+			foreach (var em in FindObjectsByType<EncounterManager>(FindObjectsSortMode.None))
+				em.RefreshMusicVolume();
 		}
 
 		// the playerprefs variable that is checked to enable hud while in game
@@ -271,22 +277,22 @@ namespace SlimUI.ModernMenu{
 		public void MobileSFXMute (){
 			if(PlayerPrefs.GetInt("Mobile_MuteSfx")==0){
 				PlayerPrefs.SetInt("Mobile_MuteSfx",1);
-				mobileSFXtext.GetComponent<TMP_Text>().text = "on";
+				mobileSFXtext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("Mobile_MuteSfx")==1){
 				PlayerPrefs.SetInt("Mobile_MuteSfx",0);
-				mobileSFXtext.GetComponent<TMP_Text>().text = "off";
+				mobileSFXtext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
 		public void MobileMusicMute (){
 			if(PlayerPrefs.GetInt("Mobile_MuteMusic")==0){
 				PlayerPrefs.SetInt("Mobile_MuteMusic",1);
-				mobileMusictext.GetComponent<TMP_Text>().text = "on";
+				mobileMusictext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("Mobile_MuteMusic")==1){
 				PlayerPrefs.SetInt("Mobile_MuteMusic",0);
-				mobileMusictext.GetComponent<TMP_Text>().text = "off";
+				mobileMusictext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
@@ -294,11 +300,11 @@ namespace SlimUI.ModernMenu{
 		public void ToolTips (){
 			if(PlayerPrefs.GetInt("ToolTips")==0){
 				PlayerPrefs.SetInt("ToolTips",1);
-				tooltipstext.GetComponent<TMP_Text>().text = "on";
+				tooltipstext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("ToolTips")==1){
 				PlayerPrefs.SetInt("ToolTips",0);
-				tooltipstext.GetComponent<TMP_Text>().text = "off";
+				tooltipstext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
@@ -359,55 +365,55 @@ namespace SlimUI.ModernMenu{
 		public void vsync (){
 			if(QualitySettings.vSyncCount == 0){
 				QualitySettings.vSyncCount = 1;
-				vsynctext.GetComponent<TMP_Text>().text = "ON";
+				vsynctext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(QualitySettings.vSyncCount == 1){
 				QualitySettings.vSyncCount = 0;
-				vsynctext.GetComponent<TMP_Text>().text = "OFF";
+				vsynctext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
 		public void InvertMouse (){
 			if(PlayerPrefs.GetInt("Inverted")==0){
 				PlayerPrefs.SetInt("Inverted",1);
-				invertmousetext.GetComponent<TMP_Text>().text = "ON";
+				invertmousetext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("Inverted")==1){
 				PlayerPrefs.SetInt("Inverted",0);
-				invertmousetext.GetComponent<TMP_Text>().text = "OFF";
+				invertmousetext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
 		public void MotionBlur (){
 			if(PlayerPrefs.GetInt("MotionBlur")==0){
 				PlayerPrefs.SetInt("MotionBlur",1);
-				motionblurtext.GetComponent<TMP_Text>().text = "on";
+				motionblurtext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("MotionBlur")==1){
 				PlayerPrefs.SetInt("MotionBlur",0);
-				motionblurtext.GetComponent<TMP_Text>().text = "off";
+				motionblurtext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
 		public void AmbientOcclusion (){
 			if(PlayerPrefs.GetInt("AmbientOcclusion")==0){
 				PlayerPrefs.SetInt("AmbientOcclusion",1);
-				ambientocclusiontext.GetComponent<TMP_Text>().text = "on";
+				ambientocclusiontext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("AmbientOcclusion")==1){
 				PlayerPrefs.SetInt("AmbientOcclusion",0);
-				ambientocclusiontext.GetComponent<TMP_Text>().text = "off";
+				ambientocclusiontext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 
 		public void CameraEffects (){
 			if(PlayerPrefs.GetInt("CameraEffects")==0){
 				PlayerPrefs.SetInt("CameraEffects",1);
-				cameraeffectstext.GetComponent<TMP_Text>().text = "on";
+				cameraeffectstext.GetComponent<TMP_Text>().text = "On";
 			}
 			else if(PlayerPrefs.GetInt("CameraEffects")==1){
 				PlayerPrefs.SetInt("CameraEffects",0);
-				cameraeffectstext.GetComponent<TMP_Text>().text = "off";
+				cameraeffectstext.GetComponent<TMP_Text>().text = "Off";
 			}
 		}
 

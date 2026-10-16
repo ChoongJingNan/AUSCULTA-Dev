@@ -6,9 +6,10 @@ using UnityEngine.AI;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using TMPro;
-
+using UnityEngine.Audio;
 public class EntitySpot : MonoBehaviour
 {
+    public AudioMixerGroup sfxMixerGroup; 
     [Header("References")]
     public EncounterManager encounterManager;
     public GameObject entityMeshObject; 
@@ -121,7 +122,7 @@ public class EntitySpot : MonoBehaviour
     {
         if (attackImpactTolerance <= 0f) attackImpactTolerance = 0.6f;
 
-        if (!isOriginalLightingSaved)
+        if (!isOriginalLightingSaved && !MenuBackgroundLoader.IsBackdrop(this))
         {
             originalAmbientColor = RenderSettings.ambientLight;
             originalAmbientMode = RenderSettings.ambientMode;
@@ -172,6 +173,7 @@ public class EntitySpot : MonoBehaviour
 
         if (chaseAudioSource == null)
         {
+            if (sfxMixerGroup != null) chaseAudioSource.outputAudioMixerGroup = sfxMixerGroup;
             chaseAudioSource = targetObj.GetComponent<AudioSource>();
             if (chaseAudioSource == null)
             {
@@ -247,6 +249,7 @@ public class EntitySpot : MonoBehaviour
 
     private void ResetExposureImmediate()
     {
+        if (MenuBackgroundLoader.IsBackdrop(this)) return;
         FetchColorAdjustments();
         if (colorAdjustments != null)
         {
@@ -346,6 +349,7 @@ public class EntitySpot : MonoBehaviour
 
     private void UpdateAtmosphereAndUI()
     {
+        if (MenuBackgroundLoader.IsBackdrop(this)) return;
         float lerpSpeed = (currentVignetteAlpha > 0f) ? zoomSpeed : atmosphereFadeOutSpeed;
         bool isSpottingActive = activeSpottedEntities.Exists(e => e.isSpotted && !e.isChasing);
 

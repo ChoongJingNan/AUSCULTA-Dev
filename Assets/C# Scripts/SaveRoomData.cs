@@ -32,4 +32,14 @@ public static class SaveRoomData
         rotation = SaveGame.Load<Quaternion>(RETURN_ROT_KEY, Quaternion.identity);
         SaveGame.Save(WAS_IN_SAVEROOM_KEY, false);
     }
+    public static void PeekReturnPoint(out Vector3 position, out Quaternion rotation)
+    {
+        position = SaveGame.Load<Vector3>(RETURN_POS_KEY, Vector3.zero);
+        rotation = SaveGame.Load<Quaternion>(RETURN_ROT_KEY, Quaternion.identity);
+    }
+
+    public static void ClearReturnPoint()
+    {
+        SaveGame.Save(WAS_IN_SAVEROOM_KEY, false);
+    }
 }

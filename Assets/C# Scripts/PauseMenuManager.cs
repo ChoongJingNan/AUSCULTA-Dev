@@ -17,6 +17,10 @@ public class PauseMenuManager : MonoBehaviour
     [Tooltip("Reference to SlimUI's menu manager if you are using its built-in panel switching for Options/Controls")]
     [SerializeField] private UIMenuManager uiMenuManager;
 
+    [Header("Load Game (save slots)")]
+    [Tooltip("A SaveSlotPanel set to Mode = Load, placed inside the pause menu canvas. Leave empty to disable.")]
+    [SerializeField] private SaveSlotPanel loadSlotPanel;
+
     [Header("Player Controllers to Freeze")]
     [SerializeField] private MonoBehaviour playerMovementScript; // Drag your FirstPersonController here
     [SerializeField] private MonoBehaviour mouseLookScript;      // Drag your MouseLook here
@@ -42,6 +46,9 @@ public class PauseMenuManager : MonoBehaviour
         {
             cachedOpenPauseMenu = true;
             MenuTransitionData.openPauseMenuOnLoad = false;
+
+            // We are coming back from Settings: tell scene-start fades (FaceTransition) to skip themselves
+            MenuTransitionData.skipSceneFadeIn = true;
         }
 
         if (playerObject == null)
@@ -73,8 +80,17 @@ public class PauseMenuManager : MonoBehaviour
             cachedHasSavedPosition = false;
         }
     }
+    private System.Collections.IEnumerator ClearSkipFadeFlagNextFrame()
+    {
+        // By the next frame every Start() in the scene has run, so the flag has been used
+        yield return null;
+        MenuTransitionData.skipSceneFadeIn = false;
+    }
+
     private void Start()
     {
+        StartCoroutine(ClearSkipFadeFlagNextFrame());
+
         if (uiMenuManager == null)
         {
             uiMenuManager = FindFirstObjectByType<UIMenuManager>();
@@ -97,6 +113,10 @@ public class PauseMenuManager : MonoBehaviour
 
     private void Update()
     {
+        // Block the pause menu while the save (vinyl) menu is open, and on the frame it closes.
+        // This must come BEFORE the Escape check, otherwise Escape closes the save menu AND pauses the game.
+        if (VinylPlayerInteraction.BlocksPause) return;
+
         // Block the pause menu entirely if the earphone inspection UI is active
         if (PuzzleUIManager.Instance != null && PuzzleUIManager.Instance.isInspectionActive)
         {
@@ -105,6 +125,13 @@ public class PauseMenuManager : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
+            // Escape closes the load-slot list first instead of resuming the game
+            if (isPaused && loadSlotPanel != null && loadSlotPanel.gameObject.activeSelf)
+            {
+                CloseLoadMenu();
+                return;
+            }
+
             if (isPaused) ResumeGame();
             else PauseGame();
         }
@@ -134,6 +161,9 @@ public class PauseMenuManager : MonoBehaviour
 
     public void ResumeGame()
     {
+        // Make sure the slot list is closed so the pause buttons are back next time
+        if (loadSlotPanel != null && loadSlotPanel.gameObject.activeSelf) loadSlotPanel.Close();
+
         isPaused = false;
         if (pauseRootPanel != null) pauseRootPanel.SetActive(false);
 
@@ -182,16 +212,35 @@ public class PauseMenuManager : MonoBehaviour
         SceneManager.LoadScene(menuSceneName);
     }
 
+    // Hook the pause menu's "Load Game" button to this
+    public void OpenLoadMenu()
+    {
+        if (loadSlotPanel == null)
+        {
+            Debug.LogWarning("[PauseMenuManager] No Load Slot Panel assigned, falling back to the latest save.");
+            LoadLatestSave();
+            return;
+        }
+        loadSlotPanel.Open();
+    }
+
+    // Hook the slot panel's Back button to this (or to the panel's own Close())
+    public void CloseLoadMenu()
+    {
+        if (loadSlotPanel != null) loadSlotPanel.Close();
+    }
+
     public void LoadCheckpoint()
     {
         Time.timeScale = 1f;
+        CheckpointData.RestoreSavedTimer();
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void LoadLatestSave()
     {
         Time.timeScale = 1f;
-
+        CheckpointData.RestoreSavedTimer();
         string savedScene = CheckpointData.GetSavedSceneName();
         if (!string.IsNullOrEmpty(savedScene))
         {

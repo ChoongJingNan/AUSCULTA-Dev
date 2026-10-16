@@ -36,7 +36,7 @@ public class LevelMusicManager : MonoBehaviour
         
         // Pull saved volume from PlayerPrefs, falling back to defaultVolume if it doesn't exist yet
         float savedVolume = PlayerPrefs.GetFloat("MusicVolume", defaultVolume);
-        musicSource.volume = savedVolume;
+        musicSource.volume = GetTargetVolume();
     }
 
     private void Start()
@@ -102,7 +102,9 @@ public class LevelMusicManager : MonoBehaviour
             StopCoroutine(fadeCoroutine);
             fadeCoroutine = null;
         }
-
+        volumeMultiplier = Mathf.Clamp01(targetVolume);
+        if (musicSource != null)
+        musicSource.volume = Mathf.Clamp01(volumeMultiplier * GetTargetVolume());
         if (musicSource != null)
         {
             // Scale the requested volume by the user's master music slider preference
@@ -128,10 +130,8 @@ public class LevelMusicManager : MonoBehaviour
         if (newTrack != null)
         {
             musicSource.Play();
-            
-            // Get the current user preference for the fade-in ceiling
-            float userMusicPref = PlayerPrefs.GetFloat("MusicVolume", defaultVolume);
-            float targetPlayVolume = defaultVolume * userMusicPref;
+            float targetPlayVolume = GetTargetVolume();
+            volumeMultiplier = 1f;
 
             // Fade in matching the user's saved volume setting
             for (float t = 0; t < duration; t += Time.deltaTime)
@@ -144,5 +144,19 @@ public class LevelMusicManager : MonoBehaviour
         }
 
         fadeCoroutine = null;
+    }
+        private float volumeMultiplier = 1f;
+
+    // The single formula for "normal music level"
+    private float GetTargetVolume()
+    {
+        return defaultVolume * PlayerPrefs.GetFloat("MusicVolume", 1f);
+    }
+
+    // Call after the player moves the music slider
+    public void RefreshVolume()
+    {
+        if (musicSource != null && fadeCoroutine == null)
+            musicSource.volume = Mathf.Clamp01(volumeMultiplier * GetTargetVolume());
     }
 }

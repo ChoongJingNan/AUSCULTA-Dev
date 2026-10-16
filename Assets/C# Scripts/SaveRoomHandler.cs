@@ -4,6 +4,7 @@ public class SaveRoomReturnHandler : MonoBehaviour
 {
     private void Start()
     {
+         if (MenuBackgroundLoader.IsBackdrop(this)) return;
         Debug.Log($"[SaveRoomReturnHandler] Start() in scene '{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' | hasReturnPoint={SaveRoomData.HasReturnPoint()}", this);
 
         // 1. Reset Backrooms lighting, atmosphere, exposure, and EncounterManager music/state

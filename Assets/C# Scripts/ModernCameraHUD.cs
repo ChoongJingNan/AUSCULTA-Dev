@@ -34,6 +34,11 @@ public class ModernCameraHUD : MonoBehaviour
     public TextMeshProUGUI dateTimeText;
 
     private static float totalSessionElapsedTime = 0f;
+        public static float SessionTime
+    {
+        get => totalSessionElapsedTime;
+        set => totalSessionElapsedTime = Mathf.Max(0f, value);
+    }
 
     private float recBlinkTimer = 0f;
     private float displayBatteryPercent = 100f;

@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 
 public class PlayerHealth : MonoBehaviour
 {
@@ -20,6 +21,10 @@ public class PlayerHealth : MonoBehaviour
     public AudioSource heartbeatAudioSource;
     public AudioClip heartbeatStage1; 
     public AudioClip heartbeatStage2; 
+
+    [Header("Safe Room")]
+    [Tooltip("Entering this scene always restores health to full, even if the player was hurt before")]
+    public string safeRoomSceneName = "SaveRoomBuild";
 
     private int currentHealth;
     private bool isInvulnerable = false;
@@ -46,6 +51,27 @@ public class PlayerHealth : MonoBehaviour
 
         SetImageAlpha(bloodOverlay1, 0f);
         SetImageAlpha(bloodOverlay2, 0f);
+        UpdateHeartbeatAudio();
+
+        // Safe room: always enter at full health
+        if (SceneManager.GetActiveScene().name == safeRoomSceneName)
+        {
+            RestoreFullHealth();
+        }
+    }
+
+    /// <summary>Back to full health: clears blood overlays, invulnerability and the heartbeat.</summary>
+    public void RestoreFullHealth()
+    {
+        currentHealth = maxHealth;
+        isInvulnerable = false;
+        lastHitTime = -999f;
+
+        currentOverlay1Alpha = 0f;
+        currentOverlay2Alpha = 0f;
+        SetImageAlpha(bloodOverlay1, 0f);
+        SetImageAlpha(bloodOverlay2, 0f);
+
         UpdateHeartbeatAudio();
     }
 

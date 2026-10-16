@@ -143,6 +143,7 @@ public class FirstPersonController : MonoBehaviour
             sprintRemaining = sprintDuration;
             sprintCooldownReset = sprintCooldown;
         }
+        LoadMouseSettings();
     }
 
     public void StopMovement()
@@ -210,28 +211,32 @@ public class FirstPersonController : MonoBehaviour
         #region Camera
 
         // Control camera movement
-        if(cameraCanMove)
-        {
-            yaw = transform.localEulerAngles.y + Input.GetAxis("Mouse X") * mouseSensitivity;
+        if (cameraCanMove){
+            float rawX = Input.GetAxis("Mouse X");
+            float rawY = Input.GetAxis("Mouse Y");
 
-            if (!invertCamera)
+            if (smoothing > 0.01f)
             {
-                pitch -= mouseSensitivity * Input.GetAxis("Mouse Y");
+                // Higher smoothing = slower response (frame-rate independent)
+                float k = Mathf.Lerp(50f, 6f, smoothing);
+                float t = 1f - Mathf.Exp(-k * Time.unscaledDeltaTime);
+                smoothedX = Mathf.Lerp(smoothedX, rawX, t);
+                smoothedY = Mathf.Lerp(smoothedY, rawY, t);
             }
             else
             {
-                // Inverted Y
-                pitch += mouseSensitivity * Input.GetAxis("Mouse Y");
+                smoothedX = rawX;
+                smoothedY = rawY;
             }
 
-            // Clamp pitch between lookAngle
+            yaw = transform.localEulerAngles.y + smoothedX * sensX;
+            pitch += (invertCamera ? 1f : -1f) * sensY * smoothedY;
+
             pitch = Mathf.Clamp(pitch, -maxLookAngle, maxLookAngle);
 
             transform.localEulerAngles = new Vector3(0, yaw, 0);
             playerCamera.transform.localEulerAngles = new Vector3(pitch, 0, 0);
         }
-
-        #region Camera Zoom
 
         if (enableZoom)
         {
@@ -275,8 +280,6 @@ public class FirstPersonController : MonoBehaviour
         }
 
         #endregion
-        #endregion
-
         #region Sprint
 
         if(enableSprint)
@@ -530,6 +533,16 @@ public class FirstPersonController : MonoBehaviour
             timer = 0;
             joint.localPosition = new Vector3(Mathf.Lerp(joint.localPosition.x, jointOriginalPos.x, Time.deltaTime * bobSpeed), Mathf.Lerp(joint.localPosition.y, jointOriginalPos.y, Time.deltaTime * bobSpeed), Mathf.Lerp(joint.localPosition.z, jointOriginalPos.z, Time.deltaTime * bobSpeed));
         }
+    }
+        private float sensX, sensY, smoothing;
+    private float smoothedX, smoothedY;
+
+    private void LoadMouseSettings()
+    {
+        sensX = PlayerPrefs.HasKey("XSensitivity") ? PlayerPrefs.GetFloat("XSensitivity") : mouseSensitivity;
+        sensY = PlayerPrefs.HasKey("YSensitivity") ? PlayerPrefs.GetFloat("YSensitivity") : mouseSensitivity;
+        smoothing = Mathf.Clamp01(PlayerPrefs.GetFloat("MouseSmoothing", 0f));
+        if (PlayerPrefs.HasKey("Inverted")) invertCamera = PlayerPrefs.GetInt("Inverted") == 1;
     }
 }
 

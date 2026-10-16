@@ -322,4 +322,9 @@ public class EncounterManager : MonoBehaviour
         
         LevelMusicManager.Instance?.SetVolume(0f);
     }
+    public void RefreshMusicVolume()
+    {
+        if (eventMusicSource != null)
+            eventMusicSource.volume = eventBaseVolume * PlayerPrefs.GetFloat("MusicVolume", 1f);
+    }
 }

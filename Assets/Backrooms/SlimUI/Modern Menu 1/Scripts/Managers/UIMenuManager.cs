@@ -11,6 +11,7 @@ namespace SlimUI.ModernMenu{
     {
         // Wipe all BayatGames save files and progression keys
         CheckpointData.DeleteSavedData();
+        ModernCameraHUD.SessionTime = 0f;
 
         // Load the starting level
         LoadScene(gameSceneName);
@@ -18,6 +19,7 @@ namespace SlimUI.ModernMenu{
 
         public void ResumeGame(string fallbackSceneName = "Level1")
         {
+            CheckpointData.RestoreSavedTimer();
             string savedScene = CheckpointData.GetSavedSceneName();
             
             if (!string.IsNullOrEmpty(savedScene))
